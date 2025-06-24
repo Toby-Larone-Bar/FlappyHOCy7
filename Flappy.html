@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Flappy Quiz</title>
+  <style>
+    canvas { background: #70c5ce; display: block; margin: auto; }
+    #score, #question, #instructions {
+      text-align: center;
+      font-family: sans-serif;
+      margin: 10px;
+    }
+    #score { font-size: 42px; }
+    #question { font-size: 36px; }
+    #instructions { font-size: 30px; }
+  </style>
+</head>
+<body>
+  <div id="instructions">Press ENTER to read the question, then SPACE to start and flap! Fly through the correct door.</div>
+  <div id="score">Score: 0</div>
+  <div id="question">Loading question...</div>
+  <canvas id="gameCanvas" width="750" height="1000"></canvas>
+
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    const gravity = 0.2;
+    const flapStrength = -7;
+
+    const totalSections = 3;
+    const canvasWidth = canvas.width;
+    const canvasHeight = canvas.height;
+    const pipeXStart = canvasWidth;
+    const pipeWidth = 150;
+    const sectionHeight = canvasHeight / totalSections;
+    const pipeSpeed = 1.5;
+
+    let bird = { x: 150, y: canvasHeight / 2, radius: 30, velocity: 0 };
+    let pipes = [];
+    let gameStarted = false;
+    let score = 0;
+
+    // All questions with correctIndex and options
+    let allQuestions = [
+      {"text":"Who is known as the first computer programmer?","correctIndex":0,"options":["Ada Lovelace","Steve Jobs","Bill Gates"]},
+      {"text":"Who helped invent the idea of a modern computer?","correctIndex":1,"options":["Charles Babbage","Alan Turing","Ada Lovelace"]},
+      {"text":"Who designed the first mechanical computer?","correctIndex":2,"options":["Steve Jobs","Alan Turing","Charles Babbage"]},
+      {"text":"Who co-founded Apple?","correctIndex":0,"options":["Steve Jobs","Bill Gates","Charles Babbage"]},
+      {"text":"Who co-founded Microsoft?","correctIndex":1,"options":["Ada Lovelace","Bill Gates","Alan Turing"]},
+      {"text":"What is the physical part of a computer called?","correctIndex":2,"options":["Software","Internet","Hardware"]},
+      {"text":"Which part is software?","correctIndex":0,"options":["Program","Keyboard","Mouse"]},
+      {"text":"Which device lets you type on a computer?","correctIndex":1,"options":["Printer","Keyboard","Monitor"]},
+      {"text":"Which device shows pictures on the computer?","correctIndex":2,"options":["Mouse","Speaker","Monitor"]},
+      {"text":"Which device prints paper from a computer?","correctIndex":0,"options":["Printer","Scanner","Keyboard"]},
+      {"text":"Which device lets you hear sounds from a computer?","correctIndex":1,"options":["Keyboard","Speaker","Monitor"]},
+      {"text":"Which is an input device?","correctIndex":2,"options":["Printer","Monitor","Mouse"]},
+      {"text":"Which is an output device?","correctIndex":0,"options":["Monitor","Keyboard","Mouse"]},
+      {"text":"What do you call instructions a computer follows?","correctIndex":1,"options":["Hardware","Software","Internet"]},
+      {"text":"What part do you click with?","correctIndex":2,"options":["Keyboard","Printer","Mouse"]},
+      {"text":"What saves your work on a computer?","correctIndex":0,"options":["File","Keyboard","Screen"]},
+      {"text":"What is used to move the cursor?","correctIndex":1,"options":["Printer","Mouse","Speaker"]},
+      {"text":"What is a program you use to write stories?","correctIndex":2,"options":["Hardware","Monitor","Software"]},
+      {"text":"Which person is famous for early computer work?","correctIndex":0,"options":["Alan Turing","Steve Jobs","Bill Gates"]},
+      {"text":"Who helped create modern computers?","correctIndex":1,"options":["Ada Lovelace","Charles Babbage","Bill Gates"]},
+      {"text":"What do you call a small computer you carry in your pocket?","correctIndex":2,"options":["Television","Printer","Smartphone"]},
+      {"text":"Which device do you use to play video games?","correctIndex":0,"options":["Console","Keyboard","Scanner"]},
+      {"text":"What do you tap on a smartphone screen?","correctIndex":1,"options":["Mouse","Touchscreen","Keyboard"]},
+      {"text":"Which device do you use to talk to someone on a smartphone?","correctIndex":2,"options":["Monitor","Printer","Microphone"]},
+      {"text":"What lets you watch videos on a smartphone?","correctIndex":0,"options":["Screen","Mouse","Keyboard"]},
+      {"text":"Which is an example of a game console?","correctIndex":1,"options":["Laptop","Xbox","Printer"]},
+      {"text":"What do you press on a game console controller?","correctIndex":2,"options":["Screen","Keyboard","Buttons"]},
+      {"text":"What is the software on a smartphone called that helps you use apps?","correctIndex":0,"options":["Operating system","Hardware","Monitor"]},
+      {"text":"Which input device lets you speak into a smartphone?","correctIndex":1,"options":["Speaker","Microphone","Keyboard"]},
+      {"text":"What device shows images from a game console?","correctIndex":2,"options":["Printer","Keyboard","TV"]}
+    ];
+
+    function shuffle(array) {
+      for(let i = array.length - 1; i > 0; i--){
+        let j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+      }
+    }
+    shuffle(allQuestions);
+
+    let currentQuestionIndex = 0;
+    let question = allQuestions[currentQuestionIndex];
+    document.getElementById("question").innerText = question.text;
+
+    let isPausedForQuestion = true;
+
+    function updateScoreDisplay() {
+      document.getElementById("score").innerText = `Score: ${score}`;
+    }
+
+    document.addEventListener("keydown", e => {
+      if (e.code === "Space") {
+        if (!isPausedForQuestion) {
+          flap();
+          if (!gameStarted) {
+            gameStarted = true;
+            gameLoop();
+          }
+        }
+      } else if (e.code === "Enter") {
+        if (isPausedForQuestion) {
+          isPausedForQuestion = false;
+          document.getElementById("instructions").innerText = "Press SPACE to flap! Fly through the correct door.";
+          if (!gameStarted) {
+            gameStarted = true;
+            gameLoop();
+          }
+        }
+      }
+    });
+
+    function flap() {
+      bird.velocity = flapStrength;
+    }
+
+    function createPipe() {
+      pipes.push({
+        x: pipeXStart,
+        passed: false,
+        questionIndex: currentQuestionIndex
+      });
+    }
+
+    function drawBird() {
+      ctx.beginPath();
+      ctx.arc(bird.x, bird.y, bird.radius, 0, Math.PI * 2);
+      ctx.fillStyle = "yellow";
+      ctx.fill();
+      ctx.strokeStyle = "black";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    function drawPipes() {
+      pipes.forEach(pipe => {
+        for (let i = 0; i < totalSections; i++) {
+          ctx.fillStyle = "green";
+          ctx.fillRect(pipe.x, i * sectionHeight, pipeWidth, sectionHeight);
+
+          ctx.strokeStyle = "black";
+          ctx.lineWidth = 3;
+          ctx.strokeRect(pipe.x, i * sectionHeight, pipeWidth, sectionHeight);
+
+          let q = allQuestions[pipe.questionIndex];
+          ctx.fillStyle = "black";
+          ctx.font = "28px sans-serif";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          let sectionCenterY = i * sectionHeight + sectionHeight / 2;
+          ctx.fillText(q.options[i], pipe.x + pipeWidth / 2, sectionCenterY);
+        }
+      });
+    }
+
+    function update() {
+      if (isPausedForQuestion) return;
+
+      bird.velocity += gravity;
+      bird.y += bird.velocity;
+
+      pipes.forEach(pipe => {
+        pipe.x -= pipeSpeed;
+
+        if (bird.x + bird.radius > pipe.x && bird.x - bird.radius < pipe.x + pipeWidth) {
+          let birdSection = Math.floor(bird.y / sectionHeight);
+          let q = allQuestions[pipe.questionIndex];
+
+          if (birdSection !== q.correctIndex) {
+            alert("Oops! Wrong answer.");
+            location.reload();
+          }
+        }
+
+        if (!pipe.passed && pipe.x + pipeWidth < bird.x) {
+          pipe.passed = true;
+          score++;
+          updateScoreDisplay();
+
+          currentQuestionIndex++;
+          if (currentQuestionIndex >= allQuestions.length) {
+            alert("You answered all questions! Congrats!");
+            location.reload();
+          } else {
+            question = allQuestions[currentQuestionIndex];
+            document.getElementById("question").innerText = question.text;
+            isPausedForQuestion = true;
+            document.getElementById("instructions").innerText = "Press ENTER to read the next question.";
+          }
+        }
+      });
+
+      pipes = pipes.filter(pipe => pipe.x + pipeWidth > 0);
+
+      if (bird.y + bird.radius > canvasHeight || bird.y - bird.radius < 0) {
+        alert("Game Over!");
+        location.reload();
+      }
+
+      if (pipes.length === 0 || pipes[pipes.length - 1].x < canvas.width - 1200) {
+        createPipe();
+      }
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawPipes();
+      drawBird();
+    }
+
+    function gameLoop() {
+      update();
+      draw();
+      if (gameStarted) requestAnimationFrame(gameLoop);
+    }
+  </script>
+</body>
+</html>
